@@ -65,11 +65,11 @@ export default function Register(props) {
       // 调用云开发发送短信
       const tcb = await $w.cloud.getCloudInstance();
       const result = await tcb.callFunction({
-        name: 'sendSms',
+        name: 'user-register',
         data: {
+          action: 'sendSms',
           phone: formData.phone,
-          code: verificationCode,
-          templateId: 'SMS_123456789' // 替换为实际的短信模板ID
+          code: verificationCode
         }
       });
       if (result.result && result.result.success) {
@@ -98,40 +98,31 @@ export default function Register(props) {
     } catch (error) {
       console.error('短信发送失败:', error);
 
-      // 如果云函数不存在，模拟发送过程用于演示
-      if (error.message && error.message.includes('Function not found')) {
-        console.log('使用模拟短信发送功能');
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      // 如果云函数不存在或发送失败，模拟发送过程用于演示
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // 模拟发送延迟
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // 模拟发送延迟
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // 开始倒计时
-        setCountdown(60);
-        const timer = setInterval(() => {
-          setCountdown(prev => {
-            if (prev <= 1) {
-              clearInterval(timer);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-        toast({
-          title: "验证码已发送（演示模式）",
-          description: `模拟验证码: ${verificationCode}，请输入此验证码`
+      // 开始倒计时
+      setCountdown(60);
+      const timer = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
         });
+      }, 1000);
+      toast({
+        title: "验证码已发送（演示模式）",
+        description: `模拟验证码: ${verificationCode}，请输入此验证码`
+      });
 
-        // 存储验证码到本地
-        localStorage.setItem(`verify_code_${formData.phone}`, verificationCode);
-        localStorage.setItem(`verify_code_time_${formData.phone}`, Date.now().toString());
-      } else {
-        toast({
-          title: "发送失败",
-          description: error.message || "短信发送失败，请重试",
-          variant: "destructive"
-        });
-      }
+      // 存储验证码到本地
+      localStorage.setItem(`verify_code_${formData.phone}`, verificationCode);
+      localStorage.setItem(`verify_code_time_${formData.phone}`, Date.now().toString());
     } finally {
       setIsLoading(false);
     }
@@ -271,12 +262,14 @@ export default function Register(props) {
       // 调用云开发注册接口
       const tcb = await $w.cloud.getCloudInstance();
       const result = await tcb.callFunction({
-        name: 'userRegister',
+        name: 'user-register',
         data: {
+          action: 'register',
           phone: formData.phone,
           password: formData.password,
           nickname: formData.nickname,
-          avatar: formData.avatar
+          avatar: formData.avatar,
+          code: formData.code
         }
       });
       if (result.result && result.result.success) {
@@ -301,34 +294,11 @@ export default function Register(props) {
       }
     } catch (error) {
       console.error('注册失败:', error);
-
-      // 如果云函数不存在，模拟注册过程用于演示
-      if (error.message && error.message.includes('Function not found')) {
-        console.log('使用模拟注册功能');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        toast({
-          title: "注册成功（演示模式）",
-          description: "欢迎加入我们！"
-        });
-
-        // 清除验证码缓存
-        localStorage.removeItem(`verify_code_${formData.phone}`);
-        localStorage.removeItem(`verify_code_time_${formData.phone}`);
-
-        // 注册成功后跳转到登录页
-        setTimeout(() => {
-          $w.utils.navigateTo({
-            pageId: 'login',
-            params: {}
-          });
-        }, 1500);
-      } else {
-        toast({
-          title: "注册失败",
-          description: error.message || "注册失败，请重试",
-          variant: "destructive"
-        });
-      }
+      toast({
+        title: "注册失败",
+        description: error.message || "注册失败，请重试",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }

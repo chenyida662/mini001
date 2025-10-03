@@ -1,9 +1,9 @@
 // @ts-ignore;
 import React, { useState, useEffect } from 'react';
 // @ts-ignore;
-import { Button, Avatar, AvatarFallback, AvatarImage, useToast } from '@/components/ui';
+import { Button, Input, Avatar, AvatarFallback, AvatarImage, useToast } from '@/components/ui';
 // @ts-ignore;
-import { LogOut, User, Smartphone } from 'lucide-react';
+import { LogOut, User, Lock, Eye, EyeOff, ArrowLeft, Smartphone } from 'lucide-react';
 
 export default function Login(props) {
   const {
@@ -13,7 +13,16 @@ export default function Login(props) {
   const {
     toast
   } = useToast();
+
+  // 表单状态
+  const [formData, setFormData] = useState({
+    username: '',
+    password: ''
+  });
+
+  // UI状态
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
 
@@ -23,37 +32,90 @@ export default function Login(props) {
     if (currentUser && currentUser.userId) {
       setIsLoggedIn(true);
       setUserInfo({
-        nickName: currentUser.nickName || currentUser.name,
+        username: currentUser.name || currentUser.nickName,
         avatarUrl: currentUser.avatarUrl,
         userId: currentUser.userId
       });
     }
   }, [$w.auth.currentUser]);
 
-  // 微信授权登录
-  const handleWechatLogin = async () => {
+  // 处理输入变化
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // 验证表单
+  const validateForm = () => {
+    if (!formData.username) {
+      toast({
+        title: "请输入用户名",
+        description: "用户名不能为空",
+        variant: "destructive"
+      });
+      return false;
+    }
+    if (!formData.password) {
+      toast({
+        title: "请输入密码",
+        description: "密码不能为空",
+        variant: "destructive"
+      });
+      return false;
+    }
+    if (formData.password.length < 6) {
+      toast({
+        title: "密码长度不足",
+        description: "密码至少需要6位字符",
+        variant: "destructive"
+      });
+      return false;
+    }
+    return true;
+  };
+
+  // 处理登录
+  const handleLogin = async () => {
+    if (!validateForm()) return;
     setIsLoading(true);
     try {
-      // 模拟微信授权登录过程
-      // 在实际小程序中，这里会调用 wx.login() 和 wx.getUserProfile()
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // 模拟获取用户信息
-      const mockUserInfo = {
-        nickName: '微信用户',
-        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=face',
-        userId: 'wechat_user_' + Date.now()
-      };
-      setUserInfo(mockUserInfo);
-      setIsLoggedIn(true);
-      toast({
-        title: "登录成功",
-        description: "欢迎回来，" + mockUserInfo.nickName + "！"
+      // 调用云开发登录接口
+      const tcb = await $w.cloud.getCloudInstance();
+      const result = await tcb.callFunction({
+        name: 'user-login',
+        data: {
+          username: formData.username,
+          password: formData.password
+        }
       });
+      if (result.result && result.result.success) {
+        const userData = result.result.data;
+        setUserInfo({
+          username: userData.username || userData.name,
+          avatarUrl: userData.avatarUrl,
+          userId: userData.userId || userData._id
+        });
+        setIsLoggedIn(true);
+        toast({
+          title: "登录成功",
+          description: `欢迎回来，${userData.username || userData.name}！`
+        });
+
+        // 清空表单
+        setFormData({
+          username: '',
+          password: ''
+        });
+      } else {
+        throw new Error(result.result?.message || '登录失败');
+      }
     } catch (error) {
+      console.error('登录失败:', error);
       toast({
         title: "登录失败",
-        description: error.message || "请重试",
+        description: error.message || "用户名或密码错误，请重试",
         variant: "destructive"
       });
     } finally {
@@ -61,7 +123,7 @@ export default function Login(props) {
     }
   };
 
-  // 退出登录
+  // 处理退出登录
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserInfo(null);
@@ -70,15 +132,33 @@ export default function Login(props) {
       description: "期待您的再次使用"
     });
   };
-  return <div style={style} className="min-h-screen bg-gradient-to-br from-green-50 to-white flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md space-y-8">
+
+  // 处理键盘事件
+  const handleKeyPress = e => {
+    if (e.key === 'Enter') {
+      handleLogin();
+    }
+  };
+  return <div style={style} className="min-h-screen bg-gradient-to-br from-green-50 to-white flex flex-col">
+      {/* 顶部导航 */}
+      <div className="bg-white shadow-sm">
+        <div className="max-w-md mx-auto px-6 py-4 flex items-center">
+          <Button variant="ghost" size="sm" onClick={() => $w.utils.navigateBack()} className="p-2">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="text-lg font-semibold text-gray-900 ml-2">用户登录</h1>
+        </div>
+      </div>
+
+      {/* 主要内容 */}
+      <div className="flex-1 max-w-md mx-auto w-full px-6 py-8">
         {/* Logo 和标题 */}
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 mb-8">
           <div className="mx-auto w-20 h-20 bg-green-500 rounded-full flex items-center justify-center">
             <Smartphone className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">欢迎使用</h1>
-          <p className="text-gray-600">安全便捷的微信授权登录</p>
+          <h2 className="text-2xl font-bold text-gray-900">欢迎登录</h2>
+          <p className="text-gray-600">请输入您的账号信息</p>
         </div>
 
         {/* 登录状态展示 */}
@@ -86,14 +166,14 @@ export default function Login(props) {
             <div className="text-center space-y-4">
               <div className="mx-auto">
                 <Avatar className="w-24 h-24 mx-auto border-4 border-green-100">
-                  <AvatarImage src={userInfo?.avatarUrl} alt={userInfo?.nickName} />
+                  <AvatarImage src={userInfo?.avatarUrl} alt={userInfo?.username} />
                   <AvatarFallback className="w-24 h-24 text-2xl bg-green-100 text-green-600">
                     <User className="w-12 h-12" />
                   </AvatarFallback>
                 </Avatar>
               </div>
               <div className="space-y-2">
-                <h2 className="text-2xl font-semibold text-gray-900">{userInfo?.nickName}</h2>
+                <h3 className="text-2xl font-semibold text-gray-900">{userInfo?.username}</h3>
                 <div className="flex items-center justify-center space-x-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                   <p className="text-sm text-gray-500">已登录</p>
@@ -109,39 +189,57 @@ export default function Login(props) {
               </Button>
             </div>
           </div> : <div className="bg-white rounded-2xl shadow-lg p-8 space-y-6">
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-semibold text-gray-900">微信授权登录</h2>
-              <p className="text-gray-600 text-sm">点击下方按钮，使用微信账号快速登录</p>
+            {/* 登录表单 */}
+            <div className="space-y-4">
+              {/* 用户名输入 */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">用户名</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Input type="text" placeholder="请输入用户名" value={formData.username} onChange={e => handleInputChange('username', e.target.value)} onKeyPress={handleKeyPress} className="pl-10 h-12 border-gray-300 focus:border-green-500 focus:ring-green-500" />
+                </div>
+              </div>
+
+              {/* 密码输入 */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">密码</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Input type={showPassword ? 'text' : 'password'} placeholder="请输入密码" value={formData.password} onChange={e => handleInputChange('password', e.target.value)} onKeyPress={handleKeyPress} className="pl-10 pr-10 h-12 border-gray-300 focus:border-green-500 focus:ring-green-500" />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1">
+                    {showPassword ? <EyeOff className="w-5 h-5 text-gray-400" /> : <Eye className="w-5 h-5 text-gray-400" />}
+                  </Button>
+                </div>
+              </div>
             </div>
-            
-            <div className="space-y-3">
-              <Button onClick={handleWechatLogin} disabled={isLoading} className="w-full h-12 bg-green-500 hover:bg-green-600 text-white text-base font-medium shadow-md hover:shadow-lg transition-all">
-                {isLoading ? <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    登录中...
-                  </div> : <div className="flex items-center justify-center">
-                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.285 1.79-1.72 1.428-2.687 3.72-1.78 6.22.943 2.452 3.666 4.229 6.886 4.229.827 0 1.622-.12 2.367-.336a.722.722 0 0 1 .598.082l1.586.928a.272.272 0 0 0 .14.045c.134 0 .24-.11.24-.246 0-.06-.023-.12-.038-.177l-.326-1.234a.492.492 0 0 1 .178-.554C23.026 18.48 24 16.86 24 15.07c0-3.277-2.932-5.947-6.677-6.197a7.53 7.53 0 0 0-.385-.015zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z" />
-                    </svg>
-                    微信授权登录
-                  </div>}
-              </Button>
-            </div>
-            
-            <div className="text-center">
-              <p className="text-xs text-gray-500">
-                登录即表示同意
-                <a href="#" className="text-green-500 hover:text-green-600 mx-1">用户协议</a>
-                和
-                <a href="#" className="text-green-500 hover:text-green-600 mx-1">隐私政策</a>
-              </p>
+
+            {/* 登录按钮 */}
+            <Button onClick={handleLogin} disabled={isLoading} className="w-full h-12 bg-green-500 hover:bg-green-600 text-white text-base font-medium shadow-md hover:shadow-lg transition-all">
+              {isLoading ? <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  登录中...
+                </div> : '登录'}
+            </Button>
+
+            {/* 其他选项 */}
+            <div className="flex items-center justify-between text-sm">
+              <button className="text-green-500 hover:text-green-600">忘记密码？</button>
+              <button onClick={() => $w.utils.navigateTo({
+            pageId: 'register',
+            params: {}
+          })} className="text-green-500 hover:text-green-600">
+                注册新账号
+              </button>
             </div>
           </div>}
 
         {/* 底部说明 */}
-        <div className="text-center space-y-2">
+        <div className="text-center mt-8 space-y-2">
           <p className="text-xs text-gray-500">
-            本应用使用微信安全授权，保护您的隐私安全
+            登录即表示同意
+            <a href="#" className="text-green-500 hover:text-green-600 mx-1">用户协议</a>
+            和
+            <a href="#" className="text-green-500 hover:text-green-600 mx-1">隐私政策</a>
           </p>
           <div className="flex items-center justify-center space-x-2 text-xs text-gray-400">
             <span>安全认证</span>
