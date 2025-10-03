@@ -1,0 +1,11 @@
+
+    {
+      "name": "user-register",
+      "description": "微信云开发用户注册云函数",
+      "version": "1.0.0",
+      "main": "index.js",
+      "dependencies": {
+        "@cloudbase/node-sdk": "^3.3.7"
+      }
+    }
+  

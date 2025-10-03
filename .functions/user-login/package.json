@@ -1,0 +1,11 @@
+
+    {
+      "name": "user-login",
+      "description": "微信云开发用户登录云函数",
+      "version": "1.0.0",
+      "main": "index.js",
+      "dependencies": {
+        "@cloudbase/node-sdk": "^3.3.7"
+      }
+    }
+  
