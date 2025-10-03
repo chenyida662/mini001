@@ -39,7 +39,7 @@ export default function Register(props) {
     }));
   };
 
-  // 获取验证码
+  // 获取验证码 - 集成真实短信接口
   const handleGetCode = async () => {
     if (!formData.phone) {
       toast({
@@ -59,33 +59,100 @@ export default function Register(props) {
     }
     setIsLoading(true);
     try {
-      // 模拟发送验证码
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // 生成随机验证码
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-      // 开始倒计时
-      setCountdown(60);
-      const timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
+      // 调用云开发发送短信
+      const tcb = await $w.cloud.getCloudInstance();
+      const result = await tcb.callFunction({
+        name: 'sendSms',
+        data: {
+          phone: formData.phone,
+          code: verificationCode,
+          templateId: 'SMS_123456789' // 替换为实际的短信模板ID
+        }
+      });
+      if (result.result && result.result.success) {
+        // 开始倒计时
+        setCountdown(60);
+        const timer = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        toast({
+          title: "验证码已发送",
+          description: `验证码已发送至 ${formData.phone.substring(0, 3)}****${formData.phone.substring(7)}，请查收短信`
         });
-      }, 1000);
-      toast({
-        title: "验证码已发送",
-        description: "请查收短信验证码"
-      });
+
+        // 将验证码存储到本地，用于后续验证（实际项目中应该存储到服务器）
+        localStorage.setItem(`verify_code_${formData.phone}`, verificationCode);
+        localStorage.setItem(`verify_code_time_${formData.phone}`, Date.now().toString());
+      } else {
+        throw new Error(result.result?.message || '短信发送失败');
+      }
     } catch (error) {
-      toast({
-        title: "发送失败",
-        description: error.message || "请重试",
-        variant: "destructive"
-      });
+      console.error('短信发送失败:', error);
+
+      // 如果云函数不存在，模拟发送过程用于演示
+      if (error.message && error.message.includes('Function not found')) {
+        console.log('使用模拟短信发送功能');
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // 模拟发送延迟
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // 开始倒计时
+        setCountdown(60);
+        const timer = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        toast({
+          title: "验证码已发送（演示模式）",
+          description: `模拟验证码: ${verificationCode}，请输入此验证码`
+        });
+
+        // 存储验证码到本地
+        localStorage.setItem(`verify_code_${formData.phone}`, verificationCode);
+        localStorage.setItem(`verify_code_time_${formData.phone}`, Date.now().toString());
+      } else {
+        toast({
+          title: "发送失败",
+          description: error.message || "短信发送失败，请重试",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 验证验证码
+  const verifyCode = inputCode => {
+    const storedCode = localStorage.getItem(`verify_code_${formData.phone}`);
+    const storedTime = localStorage.getItem(`verify_code_time_${formData.phone}`);
+    if (!storedCode || !storedTime) {
+      return false;
+    }
+
+    // 验证码有效期5分钟
+    const isExpired = Date.now() - parseInt(storedTime) > 5 * 60 * 1000;
+    if (isExpired) {
+      localStorage.removeItem(`verify_code_${formData.phone}`);
+      localStorage.removeItem(`verify_code_time_${formData.phone}`);
+      return false;
+    }
+    return storedCode === inputCode;
   };
 
   // 验证第一步表单
@@ -110,6 +177,14 @@ export default function Register(props) {
       toast({
         title: "请输入验证码",
         description: "验证码不能为空",
+        variant: "destructive"
+      });
+      return false;
+    }
+    if (!verifyCode(formData.code)) {
+      toast({
+        title: "验证码错误",
+        description: "请输入正确的验证码",
         variant: "destructive"
       });
       return false;
@@ -193,26 +268,67 @@ export default function Register(props) {
     if (!validateStep2()) return;
     setIsLoading(true);
     try {
-      // 模拟注册过程
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast({
-        title: "注册成功",
-        description: "欢迎加入我们！"
+      // 调用云开发注册接口
+      const tcb = await $w.cloud.getCloudInstance();
+      const result = await tcb.callFunction({
+        name: 'userRegister',
+        data: {
+          phone: formData.phone,
+          password: formData.password,
+          nickname: formData.nickname,
+          avatar: formData.avatar
+        }
       });
-
-      // 注册成功后跳转到登录页
-      setTimeout(() => {
-        $w.utils.navigateTo({
-          pageId: 'login',
-          params: {}
+      if (result.result && result.result.success) {
+        toast({
+          title: "注册成功",
+          description: "欢迎加入我们！"
         });
-      }, 1500);
+
+        // 清除验证码缓存
+        localStorage.removeItem(`verify_code_${formData.phone}`);
+        localStorage.removeItem(`verify_code_time_${formData.phone}`);
+
+        // 注册成功后跳转到登录页
+        setTimeout(() => {
+          $w.utils.navigateTo({
+            pageId: 'login',
+            params: {}
+          });
+        }, 1500);
+      } else {
+        throw new Error(result.result?.message || '注册失败');
+      }
     } catch (error) {
-      toast({
-        title: "注册失败",
-        description: error.message || "请重试",
-        variant: "destructive"
-      });
+      console.error('注册失败:', error);
+
+      // 如果云函数不存在，模拟注册过程用于演示
+      if (error.message && error.message.includes('Function not found')) {
+        console.log('使用模拟注册功能');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        toast({
+          title: "注册成功（演示模式）",
+          description: "欢迎加入我们！"
+        });
+
+        // 清除验证码缓存
+        localStorage.removeItem(`verify_code_${formData.phone}`);
+        localStorage.removeItem(`verify_code_time_${formData.phone}`);
+
+        // 注册成功后跳转到登录页
+        setTimeout(() => {
+          $w.utils.navigateTo({
+            pageId: 'login',
+            params: {}
+          });
+        }, 1500);
+      } else {
+        toast({
+          title: "注册失败",
+          description: error.message || "注册失败，请重试",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsLoading(false);
     }
